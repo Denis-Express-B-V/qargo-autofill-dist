@@ -46,6 +46,9 @@
   .box { border: 1px solid var(--line); border-radius: 8px; padding: .7rem .9rem; margin: .6rem 0; font-size: .95rem; }
   details { margin: .8rem 0; font-size: .925rem; }
   summary { cursor: pointer; font-weight: 600; padding: .3rem 0; }
+  .copy:disabled { opacity: .45; cursor: not-allowed; }
+  #site { display: block; width: 100%; margin: .35rem 0 0; padding: .45rem .6rem; font-family: ui-monospace, Menlo, Consolas, monospace;
+          font-size: .9rem; border: 1px solid var(--line); border-radius: 6px; }
   .warn { background: var(--stopbg); border-left: 3px solid var(--stop); border-radius: 4px; padding: .5rem .8rem; }
   [hidden] { display: none !important; }
 </style>
@@ -74,7 +77,13 @@
 
   <p data-t="intro"></p>
   <p class="warn" id="unstamped" hidden data-t="unstamped"></p>
-  <p class="warn" id="nosite" hidden data-t="nosite"></p>
+  <!-- only when the link came without its site code: the steps stay, the lines are made from what is typed here -->
+  <div class="box" id="sitebox" hidden>
+    <label for="site"><b data-t="site_label"></b></label>
+    <input id="site" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="300">
+    <p class="note" data-t="site_hint"></p>
+    <p class="warn" id="sitebad" hidden data-t="site_bad"></p>
+  </div>
 
   <h2 data-t="which"></h2>
   <div class="os" role="group">
@@ -138,7 +147,10 @@
   "title": "Install Qargo Autofill",
   "intro": "Installation takes about five minutes and needs an internet connection. It does not ask for a password.",
   "unstamped": "This copy of the page has no download address yet. Use the link you were sent.",
-  "nosite": "This link has no site code, so there is no install line to show. Open the link exactly as you were sent it (it ends in #s=...) or ask the person who sent it.",
+  "site_label": "Site code",
+  "site_hint": "The link you were sent normally carries it, and then this box does not appear. Otherwise paste here the code, or the whole link, that the person who sent you this page gave you.",
+  "site_bad": "That is not a site code. Check that you copied all of it.",
+  "need_code": "Enter the site code above first: the install line is made from it.",
   "which": "Your computer",
   "os_mac": "Mac",
   "os_win": "Windows PC",
@@ -176,7 +188,10 @@
   "title": "Qargo Autofill kurulumu",
   "intro": "Kurulum yaklaşık beş dakika sürer ve internet bağlantısı gerektirir. Şifre sormaz.",
   "unstamped": "Sayfanın bu kopyasında henüz indirme adresi yok. Size gönderilen bağlantıyı kullanın.",
-  "nosite": "Bu bağlantıda site kodu yok, bu yüzden gösterilecek kurulum satırı yok. Bağlantıyı size gönderildiği gibi açın (sonu #s=... ile biter) ya da gönderen kişiye sorun.",
+  "site_label": "Site kodu",
+  "site_hint": "Size gönderilen link bu kodu içerir; o zaman bu kutu görünmez. Görünüyorsa, bu sayfayı size gönderen kişinin verdiği kodu ya da linkin tamamını buraya yapıştırın.",
+  "site_bad": "Bu bir site kodu değil. Tamamını kopyaladığınızdan emin olun.",
+  "need_code": "Önce yukarıya site kodunu girin: kurulum satırı bu koddan oluşur.",
   "which": "Bilgisayarınız",
   "os_mac": "Mac",
   "os_win": "Windows bilgisayar",
@@ -214,7 +229,10 @@
   "title": "Qargo Autofill installeren",
   "intro": "De installatie duurt ongeveer vijf minuten en heeft een internetverbinding nodig. Er wordt geen wachtwoord gevraagd.",
   "unstamped": "Deze kopie van de pagina heeft nog geen downloadadres. Gebruik de link die u is gestuurd.",
-  "nosite": "Deze link heeft geen sitecode, dus er is geen installatieregel om te tonen. Open de link precies zoals u hem kreeg (hij eindigt op #s=...) of vraag het aan wie hem stuurde.",
+  "site_label": "Sitecode",
+  "site_hint": "De link die u kreeg bevat hem normaal, en dan verschijnt dit vak niet. Plak anders hier de code, of de hele link, die u kreeg van wie u deze pagina stuurde.",
+  "site_bad": "Dat is geen sitecode. Controleer of u alles hebt gekopieerd.",
+  "need_code": "Vul eerst hierboven de sitecode in: de installatieregel wordt ermee gemaakt.",
   "which": "Uw computer",
   "os_mac": "Mac",
   "os_win": "Windows-pc",
@@ -252,7 +270,10 @@
   "title": "Инсталиране на Qargo Autofill",
   "intro": "Инсталирането отнема около пет минути и изисква връзка с интернет. Не се иска парола.",
   "unstamped": "Това копие на страницата още няма адрес за изтегляне. Използвайте връзката, която ви е изпратена.",
-  "nosite": "Тази връзка няма код на сайта, затова няма ред за инсталиране. Отворете връзката точно както ви е изпратена (завършва на #s=...) или попитайте човека, който я изпрати.",
+  "site_label": "Код на сайта",
+  "site_hint": "Връзката, която сте получили, обикновено го съдържа и тогава това поле не се показва. Иначе поставете тук кода или цялата връзка, които ви е дал човекът, изпратил тази страница.",
+  "site_bad": "Това не е код на сайта. Проверете дали сте копирали всичко.",
+  "need_code": "Първо въведете кода на сайта по-горе: редът за инсталиране се създава от него.",
   "which": "Вашият компютър",
   "os_mac": "Mac",
   "os_win": "Компютър с Windows",
@@ -300,13 +321,18 @@
     var m = /^s=([0-9a-f]{20,40})$/.exec(part);
     if (m) SITE = m[1]; else if (part) HASH_LANG = part;
   });
-  var LINES = {
+  var LINES;
+  function build() {                                       // the lines with the site code of the moment
+   LINES = {
     mac: "curl -fsSL " + BASE + "/install-macos.sh | QARGO_SITE=" + SITE + " bash",
     // try/catch: if the download of the installer itself fails, the window says so and waits instead of closing at once
     win: 'powershell -nop -exec Bypass -Command "$env:QARGO_SITE=\'' + SITE + '\';try{irm ' + BASE + '/install-windows.ps1|iex}catch{Write-Host $_;Read-Host \'Not installed. Press Enter\'}"',
     mac_rm: "curl -fsSL " + BASE + "/uninstall-macos.sh | bash",
     win_rm: 'powershell -NoProfile -ExecutionPolicy Bypass -Command "try{irm ' + BASE + '/uninstall-windows.ps1|iex}catch{Write-Host $_;Read-Host \'Press Enter to close\'}"'
-  };
+   };
+  }
+  build();
+  var TYPED = !SITE;                                       // the link had no code: the box stays, with what is typed in it
   var WHERE = { mac: "~/Library/Application Support/QargoAutofill", win: "%LOCALAPPDATA%\\QargoAutofill" };
   var T = JSON.parse(document.getElementById("strings").textContent);
   var lang = "en", os = "";
@@ -341,15 +367,19 @@
       b.setAttribute("aria-pressed", String(b.getAttribute("data-os") === os));
     });
     Array.prototype.forEach.call(document.querySelectorAll("[data-line]"), function (el) {
-      el.textContent = line(el.getAttribute("data-line"));
+      var kind = el.getAttribute("data-line");
+      el.textContent = SITE || kind === "rm" ? line(kind) : t.need_code;
     });
-    document.getElementById("mac").hidden = os !== "mac" || !SITE;
-    document.getElementById("win").hidden = os !== "win" || !SITE;
+    Array.prototype.forEach.call(document.querySelectorAll("[data-copy]"), function (b) {
+      b.disabled = !SITE && b.getAttribute("data-copy") !== "rm";
+    });
+    document.getElementById("mac").hidden = os !== "mac";
+    document.getElementById("win").hidden = os !== "win";
     document.getElementById("after").hidden = !os;
     document.getElementById("other").hidden = !!os;
     document.getElementById("where").textContent = WHERE[os] || "";
     document.getElementById("unstamped").hidden = BASE.indexOf("://") > 0;
-    document.getElementById("nosite").hidden = !!SITE;
+    document.getElementById("sitebox").hidden = !TYPED;
   }
 
   function copy(button) {
@@ -386,6 +416,15 @@
     if (b.hasAttribute("data-lang")) { lang = b.getAttribute("data-lang"); remember("qargo-lang", lang); render(); }
     else if (b.hasAttribute("data-os")) { os = b.getAttribute("data-os"); render(); }
     else if (b.hasAttribute("data-copy")) { copy(b); }
+  });
+
+  // a code, or a whole link with #s=<code> in it, pasted into the box
+  document.getElementById("site").addEventListener("input", function (ev) {
+    var v = ev.target.value.trim(), m = /(?:^|[#&,;?]s=)([0-9a-f]{20,40})$/.exec(v) || /^([0-9a-f]{20,40})$/.exec(v);
+    SITE = m ? m[1] : "";
+    document.getElementById("sitebad").hidden = !v || !!SITE;
+    build();
+    render();
   });
 
   var wanted = HASH_LANG || remembered("qargo-lang");
