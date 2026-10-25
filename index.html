@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Qargo Autofill</title>
+<!-- One self-contained page: no external scripts, styles, fonts or images. make_release.sh fills in the public
+     address (the placeholder in BASE below). Link to a language with #tr, #nl or #bg; English is the default. -->
+<style>
+  :root { --blue: #1565c0; --ink: #1a1a1a; --muted: #555; --soft: #f3f6fa; --line: #dde3ea; --stop: #b3261e; --stopbg: #fdf1f0; }
+  * { box-sizing: border-box; }
+  html { font-size: 16px; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: var(--ink);
+         background: #fff; line-height: 1.55; }
+  main { max-width: 720px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+  header { display: flex; align-items: center; gap: .75rem; }
+  header svg { width: 36px; height: 36px; flex: none; }
+  h1 { font-size: 1.5rem; line-height: 1.25; margin: 0; font-weight: 650; }
+  h2 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
+  h3 { font-size: 1rem; margin: 0 0 .3rem; }
+  p { margin: .6rem 0; }
+  button { font: inherit; cursor: pointer; }
+  .langs { display: flex; gap: .35rem; flex-wrap: wrap; margin: 1rem 0 1.25rem; }
+  .langs button, .os button { border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 6px; }
+  .langs button { font-size: .875rem; padding: .25rem .65rem; }
+  .langs button[aria-pressed="true"], .os button[aria-pressed="true"] { border-color: var(--blue); background: var(--blue); color: #fff; }
+  .os { display: flex; gap: .5rem; flex-wrap: wrap; }
+  .os button { font-weight: 600; padding: .55rem 1.2rem; min-width: 9rem; border-radius: 8px; }
+  ol.steps { list-style: none; counter-reset: step; padding: 0; margin: 1.25rem 0; }
+  ol.steps > li { counter-increment: step; position: relative; padding: .9rem 0 .9rem 2.5rem; border-top: 1px solid var(--line); }
+  ol.steps > li::before { content: counter(step); position: absolute; left: 0; top: .95rem; width: 1.6rem; height: 1.6rem;
+         border-radius: 50%; background: var(--blue); color: #fff; font-weight: 600; font-size: .85rem; display: flex;
+         align-items: center; justify-content: center; }
+  kbd { font: inherit; font-size: .85em; border: 1px solid #c4c4c4; border-bottom-width: 2px; border-radius: 4px;
+        padding: 0 .35em; background: #f7f7f7; white-space: nowrap; }
+  .copy { display: inline-block; margin: .5rem 0; padding: .45rem 1rem; font-size: .95rem; font-weight: 600;
+          color: #fff; background: var(--blue); border: 0; border-radius: 6px; }
+  .copy:active { transform: translateY(1px); }
+  .copy.done { background: #1b7f3b; }
+  code.line { display: block; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .8rem; background: var(--soft);
+          border: 1px solid var(--line); border-radius: 6px; padding: .5rem .65rem; overflow-wrap: anywhere; user-select: all; }
+  .note { font-size: .925rem; color: var(--muted); margin: .5rem 0 0; }
+  .stop { font-size: .925rem; background: var(--stopbg); border-left: 3px solid var(--stop); border-radius: 4px; padding: .5rem .8rem;
+          margin: .6rem 0 0; }
+  .box { border: 1px solid var(--line); border-radius: 8px; padding: .7rem .9rem; margin: .6rem 0; font-size: .95rem; }
+  details { margin: .8rem 0; font-size: .925rem; }
+  summary { cursor: pointer; font-weight: 600; padding: .3rem 0; }
+  .warn { background: var(--stopbg); border-left: 3px solid var(--stop); border-radius: 4px; padding: .5rem .8rem; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <rect x="4" y="4" width="92" height="92" rx="21" fill="#1565c0"/>
+      <path d="M31 17h27l15 15v47a4 4 0 0 1-4 4H31a4 4 0 0 1-4-4V21a4 4 0 0 1 4-4z" fill="#fff"/>
+      <path d="M58 17v15h15z" fill="#bbd6f5"/>
+      <path d="M35 60l11 11 20-22" fill="none" stroke="#1565c0" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <h1 data-t="title">Install Qargo Autofill</h1>
+  </header>
+  <div class="langs" role="group" aria-label="Language">
+    <button type="button" data-lang="en">English</button>
+    <button type="button" data-lang="tr">T&uuml;rk&ccedil;e</button>
+    <button type="button" data-lang="nl">Nederlands</button>
+    <button type="button" data-lang="bg">&#1041;&#1098;&#1083;&#1075;&#1072;&#1088;&#1089;&#1082;&#1080;</button>
+  </div>
+
+  <noscript>
+    <p class="warn">This page needs JavaScript to show the steps: its install line is made from the link you were sent.</p>
+  </noscript>
+
+  <p data-t="intro"></p>
+  <p class="warn" id="unstamped" hidden data-t="unstamped"></p>
+  <p class="warn" id="nosite" hidden data-t="nosite"></p>
+
+  <h2 data-t="which"></h2>
+  <div class="os" role="group">
+    <button type="button" data-os="mac" data-t="os_mac"></button>
+    <button type="button" data-os="win" data-t="os_win"></button>
+  </div>
+  <p class="note" id="other" hidden data-t="other_device"></p>
+
+  <section id="mac" hidden>
+    <ol class="steps">
+      <!-- copy first: once Terminal is open it covers this page -->
+      <li><span data-t="m1"></span><br>
+        <button type="button" class="copy" data-copy="mac" data-t="copy"></button>
+        <code class="line" data-line="mac"></code></li>
+      <li><span data-t="m2"></span>
+        <p class="note" data-t="m_warn"></p>
+        <p class="note" data-t="m_native"></p>
+        <p class="stop" data-t="m_stop"></p></li>
+      <li data-t="m3"></li>
+    </ol>
+    <h2 data-t="problem_title"></h2>
+    <div class="box" data-t="m_fail"></div>
+  </section>
+
+  <section id="win" hidden>
+    <ol class="steps">
+      <!-- copy first: pressing the button after the Run box is open would put the browser in front of it -->
+      <li><span data-t="w1"></span><br>
+        <button type="button" class="copy" data-copy="win" data-t="copy"></button>
+        <code class="line" data-line="win"></code></li>
+      <li data-t="w2"></li>
+      <li data-t="w3"></li>
+    </ol>
+    <h2 data-t="problem_title"></h2>
+    <div class="stop"><h3 data-t="w_sac_title"></h3><div data-t="w_sac_body"></div>
+      <details><summary data-t="w_sac_owner_title"></summary><div data-t="w_sac_owner"></div></details></div>
+    <div class="box"><h3 data-t="w_clm_title"></h3><div data-t="w_clm_body"></div></div>
+    <div class="box"><h3 data-t="w_fail_title"></h3><div data-t="w_fail_body"></div></div>
+  </section>
+
+  <section id="after" hidden>
+    <h2 data-t="next_title"></h2>
+    <p data-t="next_body"></p>
+    <details>
+      <summary data-t="helper_title"></summary>
+      <p data-t="helper_does"></p>
+      <p><span data-t="helper_where"></span> <code id="where"></code></p>
+      <p data-t="helper_remove"></p>
+      <code class="line" data-line="rm"></code>
+      <button type="button" class="copy" data-copy="rm" data-t="copy"></button>
+    </details>
+  </section>
+</main>
+
+<!-- The string table: one object per language, identical keys. The quoted English sentences ("Qargo Autofill is
+     installed." and so on) are what the installers print; the macOS warning names for nl and tr were read from
+     Terminal's own resources on macOS 26.6.2. Windows names are given in English only: nothing else was checked. -->
+<script type="application/json" id="strings">
+{
+ "en": {
+  "title": "Install Qargo Autofill",
+  "intro": "Installation takes about five minutes and needs an internet connection. It does not ask for a password.",
+  "unstamped": "This copy of the page has no download address yet. Use the link you were sent.",
+  "nosite": "This link has no site code, so there is no install line to show. Open the link exactly as you were sent it (it ends in #s=...) or ask the person who sent it.",
+  "which": "Your computer",
+  "os_mac": "Mac",
+  "os_win": "Windows PC",
+  "other_device": "Open this page on the computer where Qargo Autofill will be installed, or choose a computer above to see the steps.",
+  "copy": "Copy line",
+  "copied": "Copied ✓",
+  "copy_failed": "Copying did not work. Select the line below with the mouse and copy it.",
+  "m1": "Copy the install line.",
+  "m2": "Open <b>Terminal</b> (<kbd>⌘</kbd> <kbd>Space</kbd>, type Terminal, <kbd>return</kbd>) and paste the line with <kbd>⌘</kbd> <kbd>V</kbd>.",
+  "m_warn": "macOS may show <b>“Possible Malware, Paste Blocked”</b>. It does this for any line copied from a web page; click <b>Paste Anyway</b>.",
+  "m_native": "",
+  "m_stop": "<b>Stop</b> if the warning has another title (<b>“Malware Detected, Paste Blocked”</b> or <b>“Malicious Script Blocked”</b>) or no Paste Anyway button, and contact the person who sent you this page.",
+  "m3": "Press <kbd>return</kbd> and wait for <b>Qargo Autofill is installed.</b> The program then opens and its icon appears on the desktop. You can close Terminal.",
+  "m_fail": "If Terminal shows <b>Qargo Autofill could NOT be installed</b>, check the internet connection and run the line again. If it fails again, contact the person who sent you this page.",
+  "w1": "Copy the install line.",
+  "w2": "Press <kbd>⊞ Win</kbd> <kbd>R</kbd>, paste the line with <kbd>Ctrl</kbd> <kbd>V</kbd> and press <kbd>Enter</kbd>.",
+  "w3": "Wait for <b>Qargo Autofill is installed.</b> The program then opens and its icon appears on the desktop. Press <kbd>Enter</kbd> to close the window.",
+  "problem_title": "If something goes wrong",
+  "w_sac_title": "“Windows is blocking Qargo Autofill on this PC”",
+  "w_sac_body": "Smart App Control, or a rule of the organisation that manages the PC, is blocking the program; the window says which. Do not change any settings yourself. Contact the person who sent you this page; whether the program may run is up to the owner of the PC.",
+  "w_sac_owner_title": "For the owner of the PC",
+  "w_sac_owner": "Smart App Control blocks every program Microsoft does not know yet and cannot make an exception for one. To use Qargo Autofill, switch it off: Windows Security → App &amp; browser control → Smart App Control settings → Off, then run the line again. Switching it back on later is not always possible without resetting Windows. In Evaluation mode Windows may switch it on by itself later; the program then stops starting, and running the line again explains why.",
+  "w_clm_title": "“Qargo Autofill can NOT be installed on this PC”",
+  "w_clm_body": "The organisation that manages this PC does not allow new programs. Nothing was changed. Contact the person who sent you this page.",
+  "w_fail_title": "“Qargo Autofill could NOT be installed”",
+  "w_fail_body": "Check the internet connection and run the line again. If it fails again, contact the person who sent you this page.",
+  "next_title": "After installing",
+  "next_body": "The program opens in a browser window. The first time, sign in with your usual Qargo account.",
+  "helper_title": "Technical details and uninstalling",
+  "helper_does": "The line installs the program in your own user folder and adds a desktop icon. It needs no administrator rights and changes no system settings. The program keeps itself up to date.",
+  "helper_where": "Folder:",
+  "helper_remove": "To uninstall (your documents and login are kept), run this line the same way:"
+ },
+ "tr": {
+  "title": "Qargo Autofill kurulumu",
+  "intro": "Kurulum yaklaşık beş dakika sürer ve internet bağlantısı gerektirir. Şifre sormaz.",
+  "unstamped": "Sayfanın bu kopyasında henüz indirme adresi yok. Size gönderilen bağlantıyı kullanın.",
+  "nosite": "Bu bağlantıda site kodu yok, bu yüzden gösterilecek kurulum satırı yok. Bağlantıyı size gönderildiği gibi açın (sonu #s=... ile biter) ya da gönderen kişiye sorun.",
+  "which": "Bilgisayarınız",
+  "os_mac": "Mac",
+  "os_win": "Windows bilgisayar",
+  "other_device": "Bu sayfayı Qargo Autofill’in kurulacağı bilgisayarda açın ya da adımları görmek için yukarıdan bir bilgisayar seçin.",
+  "copy": "Satırı kopyala",
+  "copied": "Kopyalandı ✓",
+  "copy_failed": "Kopyalama olmadı. Aşağıdaki satırı fareyle seçip kopyalayın.",
+  "m1": "Kurulum satırını kopyalayın.",
+  "m2": "<b>Terminal</b>’i açın (<kbd>⌘</kbd> <kbd>Boşluk</kbd>, Terminal yazın, <kbd>return</kbd>) ve satırı <kbd>⌘</kbd> <kbd>V</kbd> ile yapıştırın.",
+  "m_warn": "macOS <b>“Olası Kötü Amaçlı Yazılım; Yapıştırma Engellendi”</b> (Possible Malware, Paste Blocked) uyarısını gösterebilir. Bunu web sayfasından kopyalanan her satır için gösterir; <b>Yine de Yapıştır</b> (Paste Anyway) düğmesine tıklayın.",
+  "m_native": "",
+  "m_stop": "Uyarının <b>başlığı farklıysa</b> ya da <b>Yine de Yapıştır</b> (Paste Anyway) düğmesi yoksa <b>durun</b> ve bu sayfayı size gönderen kişiye haber verin.",
+  "m3": "<kbd>return</kbd> tuşuna basın. Terminal’de <b>Qargo Autofill is installed.</b> yazınca program açılır ve simgesi masaüstüne gelir. Ardından Terminal’i kapatabilirsiniz.",
+  "m_fail": "Terminal’de <b>Qargo Autofill could NOT be installed</b> yazarsa internet bağlantısını kontrol edip satırı yeniden çalıştırın. Yine olmazsa bu sayfayı size gönderen kişiye haber verin.",
+  "w1": "Kurulum satırını kopyalayın.",
+  "w2": "<kbd>⊞ Win</kbd> <kbd>R</kbd> tuşlarına basın, satırı <kbd>Ctrl</kbd> <kbd>V</kbd> ile yapıştırın ve <kbd>Enter</kbd> tuşuna basın.",
+  "w3": "Pencerede <b>Qargo Autofill is installed.</b> yazınca program açılır ve simgesi masaüstüne gelir. Pencereyi kapatmak için <kbd>Enter</kbd> tuşuna basın.",
+  "problem_title": "Bir sorun çıkarsa",
+  "w_sac_title": "“Windows is blocking Qargo Autofill on this PC”",
+  "w_sac_body": "Programı Akıllı Uygulama Denetimi (Smart App Control) ya da bilgisayarı yöneten kuruluşun bir kuralı engelliyor; hangisi olduğunu pencere yazar. Ayarları kendiniz değiştirmeyin. Bu sayfayı size gönderen kişiye haber verin; programın çalışmasına izin verilip verilmeyeceğine bilgisayarın sahibi karar verir.",
+  "w_sac_owner_title": "Bilgisayarın sahibi için",
+  "w_sac_owner": "Akıllı Uygulama Denetimi, Microsoft’un henüz tanımadığı her programı engeller ve tek bir program için istisna yapamaz. Qargo Autofill’i kullanmak için kapatın: Windows Güvenliği (Windows Security) → Uygulama ve tarayıcı denetimi (App &amp; browser control) → Akıllı Uygulama Denetimi ayarları (Smart App Control settings) → Kapalı (Off); sonra satırı yeniden çalıştırın. Daha sonra yeniden açmak, Windows sıfırlanmadan her zaman mümkün olmaz. Değerlendirme (Evaluation) modunda Windows onu ileride kendiliğinden açabilir; program o zaman başlamaz ve satırı yeniden çalıştırmak nedenini açıklar.",
+  "w_clm_title": "“Qargo Autofill can NOT be installed on this PC”",
+  "w_clm_body": "Bu bilgisayarı yöneten kuruluş yeni programlara izin vermiyor. Hiçbir şey değiştirilmedi. Bu sayfayı size gönderen kişiye haber verin.",
+  "w_fail_title": "“Qargo Autofill could NOT be installed”",
+  "w_fail_body": "İnternet bağlantısını kontrol edip satırı yeniden çalıştırın. Yine olmazsa bu sayfayı size gönderen kişiye haber verin.",
+  "next_title": "Kurulumdan sonra",
+  "next_body": "Program bir tarayıcı penceresinde açılır. İlk seferde her zamanki Qargo hesabınızla oturum açın.",
+  "helper_title": "Teknik bilgiler ve kaldırma",
+  "helper_does": "Satır, programı kendi kullanıcı klasörünüze kurar ve masaüstüne bir simge ekler. Yönetici hakkı gerektirmez ve sistem ayarlarını değiştirmez. Program kendini güncel tutar.",
+  "helper_where": "Klasör:",
+  "helper_remove": "Kaldırmak için (belgeleriniz ve oturumunuz korunur) şu satırı aynı şekilde çalıştırın:"
+ },
+ "nl": {
+  "title": "Qargo Autofill installeren",
+  "intro": "De installatie duurt ongeveer vijf minuten en heeft een internetverbinding nodig. Er wordt geen wachtwoord gevraagd.",
+  "unstamped": "Deze kopie van de pagina heeft nog geen downloadadres. Gebruik de link die u is gestuurd.",
+  "nosite": "Deze link heeft geen sitecode, dus er is geen installatieregel om te tonen. Open de link precies zoals u hem kreeg (hij eindigt op #s=...) of vraag het aan wie hem stuurde.",
+  "which": "Uw computer",
+  "os_mac": "Mac",
+  "os_win": "Windows-pc",
+  "other_device": "Open deze pagina op de computer waarop Qargo Autofill moet komen, of kies hierboven een computer om de stappen te zien.",
+  "copy": "Kopieer de regel",
+  "copied": "Gekopieerd ✓",
+  "copy_failed": "Kopiëren is niet gelukt. Selecteer de regel hieronder met de muis en kopieer hem.",
+  "m1": "Kopieer de installatieregel.",
+  "m2": "Open <b>Terminal</b> (<kbd>⌘</kbd> <kbd>Spatie</kbd>, typ Terminal, <kbd>return</kbd>) en plak de regel met <kbd>⌘</kbd> <kbd>V</kbd>.",
+  "m_warn": "macOS kan <b>“Mogelijke malware, plakken geblokkeerd”</b> (Possible Malware, Paste Blocked) tonen. Dat gebeurt bij elke regel die van een webpagina komt; klik op <b>Plak toch</b> (Paste Anyway).",
+  "m_native": "",
+  "m_stop": "<b>Stop</b> als de waarschuwing <b>een andere titel</b> heeft of de knop <b>Plak toch</b> (Paste Anyway) ontbreekt, en neem contact op met degene die u deze pagina heeft gestuurd.",
+  "m3": "Druk op <kbd>return</kbd>. Zodra Terminal <b>Qargo Autofill is installed.</b> toont, opent het programma en staat het pictogram op het bureaublad. Daarna kunt u Terminal sluiten.",
+  "m_fail": "Toont Terminal <b>Qargo Autofill could NOT be installed</b>? Controleer de internetverbinding en voer de regel opnieuw uit. Lukt het weer niet, neem dan contact op met degene die u deze pagina heeft gestuurd.",
+  "w1": "Kopieer de installatieregel.",
+  "w2": "Druk op <kbd>⊞ Win</kbd> <kbd>R</kbd>, plak de regel met <kbd>Ctrl</kbd> <kbd>V</kbd> en druk op <kbd>Enter</kbd>.",
+  "w3": "Zodra het venster <b>Qargo Autofill is installed.</b> toont, opent het programma en staat het pictogram op het bureaublad. Druk op <kbd>Enter</kbd> om het venster te sluiten.",
+  "problem_title": "Als er iets misgaat",
+  "w_sac_title": "“Windows is blocking Qargo Autofill on this PC”",
+  "w_sac_body": "Smart App Control, of een regel van de organisatie die de pc beheert, houdt het programma tegen; het venster zegt welke van de twee. Verander zelf geen instellingen. Neem contact op met degene die u deze pagina heeft gestuurd; of het programma mag draaien, beslist de eigenaar van de pc.",
+  "w_sac_owner_title": "Voor de eigenaar van de pc",
+  "w_sac_owner": "Smart App Control houdt elk programma tegen dat Microsoft nog niet kent, en een uitzondering voor één programma is niet mogelijk. Om Qargo Autofill te gebruiken zet u het uit: Windows-beveiliging (Windows Security) → App- en browserbeheer (App &amp; browser control) → Instellingen voor Smart App Control → Uit (Off), en voert u de regel opnieuw uit. Later weer aanzetten lukt niet altijd zonder Windows opnieuw in te stellen. In de stand Evaluatie (Evaluation) kan Windows het later zelf aanzetten; het programma start dan niet meer, en de regel opnieuw uitvoeren legt uit waarom.",
+  "w_clm_title": "“Qargo Autofill can NOT be installed on this PC”",
+  "w_clm_body": "De organisatie die deze pc beheert, staat geen nieuwe programma’s toe. Er is niets veranderd. Neem contact op met degene die u deze pagina heeft gestuurd.",
+  "w_fail_title": "“Qargo Autofill could NOT be installed”",
+  "w_fail_body": "Controleer de internetverbinding en voer de regel opnieuw uit. Lukt het weer niet, neem dan contact op met degene die u deze pagina heeft gestuurd.",
+  "next_title": "Na de installatie",
+  "next_body": "Het programma opent in een browservenster. Log de eerste keer in met uw gewone Qargo-account.",
+  "helper_title": "Technische details en verwijderen",
+  "helper_does": "De regel installeert het programma in uw eigen gebruikersmap en zet een pictogram op het bureaublad. Er zijn geen beheerdersrechten nodig en er worden geen systeeminstellingen gewijzigd. Het programma werkt zichzelf bij.",
+  "helper_where": "Map:",
+  "helper_remove": "Om het programma te verwijderen (documenten en login blijven bewaard) voert u deze regel op dezelfde manier uit:"
+ },
+ "bg": {
+  "title": "Инсталиране на Qargo Autofill",
+  "intro": "Инсталирането отнема около пет минути и изисква връзка с интернет. Не се иска парола.",
+  "unstamped": "Това копие на страницата още няма адрес за изтегляне. Използвайте връзката, която ви е изпратена.",
+  "nosite": "Тази връзка няма код на сайта, затова няма ред за инсталиране. Отворете връзката точно както ви е изпратена (завършва на #s=...) или попитайте човека, който я изпрати.",
+  "which": "Вашият компютър",
+  "os_mac": "Mac",
+  "os_win": "Компютър с Windows",
+  "other_device": "Отворете тази страница на компютъра, на който ще се инсталира Qargo Autofill, или изберете компютър по-горе, за да видите стъпките.",
+  "copy": "Копирай реда",
+  "copied": "Копирано ✓",
+  "copy_failed": "Копирането не успя. Маркирайте реда по-долу с мишката и го копирайте.",
+  "m1": "Копирайте реда за инсталиране.",
+  "m2": "Отворете <b>Terminal</b> (<kbd>⌘</kbd> <kbd>интервал</kbd>, напишете Terminal, <kbd>return</kbd>) и поставете реда с <kbd>⌘</kbd> <kbd>V</kbd>.",
+  "m_warn": "macOS може да покаже <b>“Possible Malware, Paste Blocked”</b>. Това се случва за всеки ред, копиран от уеб страница; щракнете върху <b>Paste Anyway</b>.",
+  "m_native": "Предупреждението е на езика на вашия Mac; тук имената са дадени на английски.",
+  "m_stop": "<b>Спрете</b>, ако предупреждението е с друго заглавие (<b>“Malware Detected, Paste Blocked”</b> или <b>“Malicious Script Blocked”</b>) или няма бутон Paste Anyway, и се свържете с човека, който ви е изпратил тази страница.",
+  "m3": "Натиснете <kbd>return</kbd> и изчакайте <b>Qargo Autofill is installed.</b> След това програмата се отваря и иконата ѝ се появява на работния плот. Можете да затворите Terminal.",
+  "m_fail": "Ако Terminal покаже <b>Qargo Autofill could NOT be installed</b>, проверете връзката с интернет и изпълнете реда отново. Ако пак не стане, свържете се с човека, който ви е изпратил тази страница.",
+  "w1": "Копирайте реда за инсталиране.",
+  "w2": "Натиснете <kbd>⊞ Win</kbd> <kbd>R</kbd>, поставете реда с <kbd>Ctrl</kbd> <kbd>V</kbd> и натиснете <kbd>Enter</kbd>.",
+  "w3": "Изчакайте <b>Qargo Autofill is installed.</b> След това програмата се отваря и иконата ѝ се появява на работния плот. Натиснете <kbd>Enter</kbd>, за да затворите прозореца.",
+  "problem_title": "Ако нещо се обърка",
+  "w_sac_title": "“Windows is blocking Qargo Autofill on this PC”",
+  "w_sac_body": "Програмата е спряна от „Интелигентно управление на приложенията“ (Smart App Control) или от правило на организацията, която управлява компютъра; прозорецът казва кое от двете. Не променяйте настройки сами. Свържете се с човека, който ви е изпратил тази страница; дали програмата да бъде разрешена, решава собственикът на компютъра.",
+  "w_sac_owner_title": "За собственика на компютъра",
+  "w_sac_owner": "„Интелигентно управление на приложенията“ спира всяка програма, която Microsoft още не познава, и не позволява изключение за отделна програма. За да използвате Qargo Autofill, го изключете: Защита в Windows (Windows Security) → Управление на приложения и браузър (App &amp; browser control) → настройки на „Интелигентно управление на приложенията“ (Smart App Control settings) → Изкл. (Off), и изпълнете реда отново. Повторното включване по-късно не винаги е възможно без нулиране на Windows. В режим „Оценка“ (Evaluation) Windows може по-късно сам да го включи; тогава програмата спира да се стартира, а повторното изпълнение на реда обяснява защо.",
+  "w_clm_title": "“Qargo Autofill can NOT be installed on this PC”",
+  "w_clm_body": "Организацията, която управлява този компютър, не разрешава нови програми. Нищо не е променено. Свържете се с човека, който ви е изпратил тази страница.",
+  "w_fail_title": "“Qargo Autofill could NOT be installed”",
+  "w_fail_body": "Проверете връзката с интернет и изпълнете реда отново. Ако пак не стане, свържете се с човека, който ви е изпратил тази страница.",
+  "next_title": "След инсталирането",
+  "next_body": "Програмата се отваря в прозорец на браузър. Първия път влезте с обичайния си акаунт в Qargo.",
+  "helper_title": "Технически подробности и премахване",
+  "helper_does": "Редът инсталира програмата във вашата потребителска папка и добавя икона на работния плот. Не изисква администраторски права и не променя системни настройки. Програмата се обновява сама.",
+  "helper_where": "Папка:",
+  "helper_remove": "За да премахнете програмата (документите и входът се запазват), изпълнете този ред по същия начин:"
+ }
+}
+</script>
+<script>
+(function () {
+  "use strict";
+  var BASE = "https://raw.githubusercontent.com/cagataysunal/qargo-autofill-dist/main";                       // make_release.sh fills in the public address
+  // The link that was sent ends in #s=<site code> (and maybe &<language>): the id of the secret gist with the site
+  // profile. Only hex digits get into a line that is pasted into a shell.
+  var HASH = (location.hash || "").replace("#", "").split(/[&,;]/);
+  var SITE = "", HASH_LANG = "";
+  HASH.forEach(function (part) {
+    var m = /^s=([0-9a-f]{20,40})$/.exec(part);
+    if (m) SITE = m[1]; else if (part) HASH_LANG = part;
+  });
+  var LINES = {
+    mac: "curl -fsSL " + BASE + "/install-macos.sh | QARGO_SITE=" + SITE + " bash",
+    // try/catch: if the download of the installer itself fails, the window says so and waits instead of closing at once
+    win: 'powershell -nop -exec Bypass -Command "$env:QARGO_SITE=\'' + SITE + '\';try{irm ' + BASE + '/install-windows.ps1|iex}catch{Write-Host $_;Read-Host \'Not installed. Press Enter\'}"',
+    mac_rm: "curl -fsSL " + BASE + "/uninstall-macos.sh | bash",
+    win_rm: 'powershell -NoProfile -ExecutionPolicy Bypass -Command "try{irm ' + BASE + '/uninstall-windows.ps1|iex}catch{Write-Host $_;Read-Host \'Press Enter to close\'}"'
+  };
+  var WHERE = { mac: "~/Library/Application Support/QargoAutofill", win: "%LOCALAPPDATA%\\QargoAutofill" };
+  var T = JSON.parse(document.getElementById("strings").textContent);
+  var lang = "en", os = "";
+
+  function remembered(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+  function remember(key, value) { try { localStorage.setItem(key, value); } catch (e) { /* private window */ } }
+
+  function detectOs() {
+    var ua = navigator.userAgent || "", p = navigator.platform || "";
+    if (/Android|iPhone|iPad|iPod/i.test(ua) || (/Mac/i.test(p) && navigator.maxTouchPoints > 1)) return "";   // phone or tablet
+    if (/Mac/i.test(p) || /Macintosh/i.test(ua)) return "mac";
+    if (/Win/i.test(p) || /Windows/i.test(ua)) return "win";
+    return "";
+  }
+
+  function line(kind) { return kind === "rm" ? LINES[(os || "mac") + "_rm"] : LINES[kind]; }
+
+  function render() {
+    var t = T[lang];
+    document.documentElement.lang = lang;
+    document.title = t.title;
+    Array.prototype.forEach.call(document.querySelectorAll("[data-t]"), function (el) {
+      var text = t[el.getAttribute("data-t")];
+      if (el.classList.contains("copy") && el.classList.contains("done")) text = t.copied;
+      el.innerHTML = text;                                 // the table is ours; it holds <b> and <kbd> on purpose
+      if (el.classList.contains("note")) el.hidden = !text || el.id === "other" && !!os;
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-lang]"), function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-lang") === lang));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-os]"), function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-os") === os));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-line]"), function (el) {
+      el.textContent = line(el.getAttribute("data-line"));
+    });
+    document.getElementById("mac").hidden = os !== "mac" || !SITE;
+    document.getElementById("win").hidden = os !== "win" || !SITE;
+    document.getElementById("after").hidden = !os;
+    document.getElementById("other").hidden = !!os;
+    document.getElementById("where").textContent = WHERE[os] || "";
+    document.getElementById("unstamped").hidden = BASE.indexOf("://") > 0;
+    document.getElementById("nosite").hidden = !!SITE;
+  }
+
+  function copy(button) {
+    var text = line(button.getAttribute("data-copy"));
+    function done(ok) {
+      if (!ok) { window.alert(T[lang].copy_failed); return; }
+      button.classList.add("done");
+      button.innerHTML = T[lang].copied;
+      setTimeout(function () { button.classList.remove("done"); button.innerHTML = T[lang].copy; }, 6000);
+    }
+    function oldWay() {                                    // pages opened from a file, old browsers
+      var area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      var ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(area);
+      done(ok);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, oldWay);
+    } else {
+      oldWay();
+    }
+  }
+
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest ? ev.target.closest("button") : null;
+    if (!b) return;
+    if (b.hasAttribute("data-lang")) { lang = b.getAttribute("data-lang"); remember("qargo-lang", lang); render(); }
+    else if (b.hasAttribute("data-os")) { os = b.getAttribute("data-os"); render(); }
+    else if (b.hasAttribute("data-copy")) { copy(b); }
+  });
+
+  var wanted = HASH_LANG || remembered("qargo-lang");
+  if (!wanted) {                                           // the language of the reader's own computer, when we have it
+    var prefs = navigator.languages || [navigator.language || ""];
+    for (var i = 0; i < prefs.length && !wanted; i++) { var two = String(prefs[i]).slice(0, 2).toLowerCase(); if (T[two]) wanted = two; }
+  }
+  if (wanted && T[wanted]) lang = wanted;                  // else English
+  os = detectOs();
+  render();
+})();
+</script>
+</body>
+</html>
