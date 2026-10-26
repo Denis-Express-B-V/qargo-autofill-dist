@@ -5,6 +5,7 @@ before any virtualenv exists, and is the same file on macOS and Windows.
     <python> qargo_launcher.py launch            the icon: start the app at once, then get an update ready for the next start
     <python> qargo_launcher.py install --dist U [--site ID]   first install / repair (called by the installers)
     <python> qargo_launcher.py status | rollback | reset-profile
+    <python> qargo_launcher.py stage             launch starts this on its own: the next version, after the program is up
 
 Layout under QARGO_HOME (macOS ~/Library/Application Support/QargoAutofill, Windows %LOCALAPPDATA%\\QargoAutofill):
     bin/uv[.exe]            private uv                    python/      uv-managed CPython (UV_PYTHON_INSTALL_DIR)
@@ -917,8 +918,20 @@ def cmd_launch(extra):
     if "error" in box:
         return fatal(repr(box["error"]))
     if ui.stage:
-        stage(load_state())                                         # no window of ours: the program is open already
+        spawn_stage()
     return box.get("value", 0)
+
+
+def spawn_stage():
+    """the background update in a process of its own, so this launcher ends now. On macOS a Tk window stays on the
+    screen, frozen, until its process ends: "Starting…" stood over the open program for the whole download (70 s,
+    26 Oct 2026)."""
+    try:
+        own = dict(creationflags=NO_WINDOW | 0x00000200) if WIN else dict(start_new_session=True)   # CREATE_NEW_PROCESS_GROUP
+        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "stage"], env=os.environ.copy(),
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **own)
+    except Exception as e:                                          # the next start tries again
+        log("background update not started:", repr(e))
 
 
 def cmd_install(dist, site=None):
@@ -1007,6 +1020,9 @@ def main(argv):
     if cmd == "install":
         arg = lambda flag: argv[argv.index(flag) + 1] if flag in argv[:-1] else None
         return cmd_install(arg("--dist"), arg("--site"))
+    if cmd == "stage":                                              # started by cmd_launch, never by hand
+        stage(load_state())
+        return 0
     if cmd == "status":
         return cmd_status()
     if cmd == "rollback":
