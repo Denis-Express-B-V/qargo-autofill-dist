@@ -2,7 +2,7 @@
 """Qargo Autofill launcher and updater.  Standard library only: it runs on the uv-managed base Python,
 before any virtualenv exists, and is the same file on macOS and Windows.
 
-    <python> qargo_launcher.py launch            the icon: quick update check, then start the app
+    <python> qargo_launcher.py launch            the icon: start the app at once, then get an update ready for the next start
     <python> qargo_launcher.py install --dist U [--site ID]   first install / repair (called by the installers)
     <python> qargo_launcher.py status | rollback | reset-profile
 
@@ -11,6 +11,7 @@ Layout under QARGO_HOME (macOS ~/Library/Application Support/QargoAutofill, Wind
     uv-cache/               UV_CACHE_DIR                  browsers/    PLAYWRIGHT_BROWSERS_PATH
     qargo_launcher.py       this file                     assets/      icons (both follow the active version)
     app/state.json          dist URL, site code, current / previous / bad versions, chosen browser
+    app/update.json         what an update in the background got ready for the next start (see stage)
     app/site.json           the site profile: the names the public release holds as placeholders (see fill_in_site)
     app/versions/<ver>/     unpacked release zip (.ok when complete)
     envs/<lockhash>/        virtualenv for one uv.lock (.ok when complete, .browser = chromium|chrome|msedge)
@@ -22,8 +23,9 @@ from pathlib import Path
 WIN, MAC = sys.platform == "win32", sys.platform == "darwin"
 APP_TITLE = "Qargo Autofill"
 DIST_BASE = "https://raw.githubusercontent.com/cagataysunal/qargo-autofill-dist/main"     # make_release.sh stamps the public address here; state.json's "dist" wins
-CHECK_BUDGET = 4                      # seconds the icon may wait for latest.json; offline -> start the installed version
-START_WAIT = 60                       # seconds we watch a started app for its "control page is showing" file
+CHECK_BUDGET = 30                     # seconds to wait for latest.json: never before a start that has a working version
+UPDATE_WAIT = 900                     # seconds an install or repair waits for an update that runs in the background
+START_WAIT = 60                      # seconds we watch a started app for its "control page is showing" file
 BROWSERS = ("chromium", "msedge", "chrome") if WIN else ("chromium", "chrome", "msedge")       # order of preference
 HEADLESS = os.environ.get("QARGO_HEADLESS") == "1"      # tests: no window of ours on the screen, messages go to the log
 
@@ -62,6 +64,7 @@ HOME = Path(os.environ.get("QARGO_HOME") or default_home())
 APP, VERSIONS, ENVS, DATA = HOME / "app", HOME / "app" / "versions", HOME / "envs", HOME / "data"
 LOGS = DATA / "logs"
 STATE, STARTED_OK, LOCK = APP / "state.json", APP / "started_ok", APP / "launcher.lock"
+UPDATE_FILE, UPDATE_LOCK = APP / "update.json", APP / "update.lock"     # see stage()
 APP_LOCK = DATA / "app.lock"                  # the app's own single-instance file (pid, port, token)
 UV = HOME / "bin" / ("uv.exe" if WIN else "uv")
 NO_WINDOW = 0x08000000 if WIN else 0          # CREATE_NO_WINDOW: no console flash when started by pythonw.exe
@@ -193,24 +196,46 @@ def app_running(state):
     return any(ours_alive(p) for p in pids if p)
 
 
-def take_lock():
-    """one launcher at a time: a second double-click while the first is still updating must not start a second update"""
+def take_lock(path=LOCK):
+    """one at a time. LOCK: one start at a time (a second double-click while the first is still starting the program).
+    UPDATE_LOCK: one update at a time (in the background, or an install / repair): two must never unpack one version."""
     APP.mkdir(parents=True, exist_ok=True)
     for _ in range(2):
         try:
-            fd = os.open(LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             os.write(fd, str(os.getpid()).encode())
             os.close(fd)
             return True
         except FileExistsError:
             try:
-                owner, age = LOCK.read_text(encoding="utf-8").strip(), time.time() - LOCK.stat().st_mtime
+                owner, age = path.read_text(encoding="utf-8").strip(), time.time() - path.stat().st_mtime
             except OSError:
                 continue
             if (not owner and age < 5) or (owner and ours_alive(owner)):
                 return False
-            LOCK.unlink(missing_ok=True)                            # left behind by a launcher that died
+            path.unlink(missing_ok=True)                            # left behind by a launcher that died
     return False
+
+
+def updating_elsewhere():
+    """is another launcher getting an update ready right now? (its folders must not be pruned under it)"""
+    try:
+        owner = UPDATE_LOCK.read_text(encoding="utf-8").strip()
+    except OSError:
+        return False
+    return owner != str(os.getpid()) and (not owner or ours_alive(owner))
+
+
+def wait_update_lock(step=lambda key: None):
+    """the update lock, after an update that runs in the background has finished (it may be getting the very version
+    an install or a repair wants). False when it is still busy after UPDATE_WAIT."""
+    deadline = time.time() + UPDATE_WAIT
+    while not take_lock(UPDATE_LOCK):
+        if time.time() > deadline:
+            return False
+        step("update")
+        time.sleep(1)
+    return True
 
 
 def run(cmd, cwd=None, env=None, timeout=1800):
@@ -445,11 +470,13 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(ignore_cleanup_errors=T
 
 
 def ensure_browser(envdir, state, fresh=False):
-    """the browser the app will drive: Playwright's own Chromium, else an installed Chrome or Edge that really starts here"""
+    """the browser the app will drive: Playwright's own Chromium, else an installed Chrome or Edge that really starts here.
+    Kept in state["browser"]; the caller saves state (an update in the background never does)."""
     marker = envdir / ".browser"
     if marker.exists() and not fresh:
         name = marker.read_text(encoding="utf-8").strip()
         if name in BROWSERS:
+            state["browser"] = name
             return name
     order = list(BROWSERS)
     if not fresh and state.get("browser") in order:                 # stay with the browser the operator is logged in with
@@ -463,7 +490,6 @@ def ensure_browser(envdir, state, fresh=False):
         if run([venv_python(envdir), "-c", PROBE, name], env=tool_env(), timeout=120) == 0:
             marker.write_text(name, encoding="utf-8")
             state["browser"] = name
-            save_state(state)
             return name
         log(f"browser {name} could not be started here")
     raise RuntimeError("no usable browser: Chromium could not be downloaded or started, and neither Chrome nor Edge works")
@@ -478,7 +504,11 @@ def selftest(vdir, envdir, version, browser):
 # ---------------------------------------------------------------- versions
 
 def prune(state):
-    keep = {v for v in (state.get("current"), state.get("previous")) if v}
+    """delete the versions and virtualenvs that are neither current, previous nor ready for the next start. Not while
+    an update runs in the background: the folders it is making would look like left-overs."""
+    if updating_elsewhere():
+        return log("not pruning old versions: an update is being made ready")
+    keep = {v for v in (state.get("current"), state.get("previous"), read_update().get("ready")) if v}
     keep_envs = {lock_hash(VERSIONS / v) for v in keep if (VERSIONS / v / "uv.lock").exists()}
     for d in VERSIONS.iterdir():
         if d.is_dir() and d.name not in keep:
@@ -515,26 +545,19 @@ def rollback(state, why):
     return True
 
 
-def update(state, budget, repair=False, step=lambda key: None):
-    """install the version latest.json names, if it is new; returns True when something changed. Raises on failure."""
-    dist = state["dist"].rstrip("/")
-    meta = fetch_latest(dist, budget)
+def get_version(state, dist, meta, repair=False):
+    """download, unpack, virtualenv, browser and self-test of the version latest.json names; returns its folder.
+    Writes only that version's own folders. Raises on failure; a version that fails its self-test, or needs a site
+    profile this computer cannot get, goes into state["bad"] (not tried again; a reinstall clears it). Saves nothing."""
     version, bad = meta["version"], state.setdefault("bad", [])
-    if repair and version in bad:                                   # a person asked for it: give the version another chance
-        bad.remove(version)
-    if version in bad or (version == state.get("current") and not repair):
-        return False
-    step("update")
-    log(f"installing {version} (current: {state.get('current')})")
     vdir = VERSIONS / version
     if repair or not (vdir / ".ok").exists():
         z = APP / "downloads" / f"{version}.zip"
         download(f"{dist}/{meta['zip']}", z, meta["sha256"])
         try:
             unpack(z, vdir, version, state)
-        except NoSite:                                              # not again at every start: a reinstall clears "bad"
+        except NoSite:
             bad.append(version)
-            save_state(state)
             raise
         finally:
             z.unlink(missing_ok=True)
@@ -547,11 +570,107 @@ def update(state, budget, repair=False, step=lambda key: None):
             browser = ensure_browser(envdir, state, fresh=True)
         if not repair or not selftest(vdir, envdir, version, browser):
             bad.append(version)
-            save_state(state)
             raise RuntimeError(f"version {version} failed its self-test; staying on {state.get('current')}")
+    return vdir
+
+
+def update(state, budget, repair=False, step=lambda key: None):
+    """install the version latest.json names, if it is new, and make it the current one; returns True when something
+    changed. Raises on failure. Only with UPDATE_LOCK held, and only while the program is not open (install, repair)."""
+    dist = state["dist"].rstrip("/")
+    meta = fetch_latest(dist, budget)
+    version, bad = meta["version"], state.setdefault("bad", [])
+    if repair and version in bad:                                   # a person asked for it: give the version another chance
+        bad.remove(version)
+    if version in bad or (version == state.get("current") and not repair):
+        return False
+    step("update")
+    log(f"installing {version} (current: {state.get('current')})")
+    try:
+        vdir = get_version(state, dist, meta, repair)
+    except Exception:
+        save_state(state)                                           # the bad list, the browser chosen
+        raise
     activate(state, version, vdir)
     log(f"now on {version}")
     return True
+
+
+# ---------------------------------------------------------------- updates in the background
+# The icon starts the installed version at once. Once the program is up, the launcher asks for latest.json and gets a
+# new version ready next to the running one: its own app/versions/<new> and envs/<hash> folders, nothing of the
+# running version is touched. It never writes state.json (a start may happen meanwhile): what it got ready goes to
+# app/update.json, which the next start reads (take_ready) - that start runs the new version. The app reads the same
+# file and says in its window that an update is ready.
+
+def read_update():
+    """app/update.json: {"ready": version got ready for the next start, "bad": versions that failed in the background}"""
+    try:
+        u = json.loads(UPDATE_FILE.read_text(encoding="utf-8-sig"))
+        return u if isinstance(u, dict) else {}
+    except Exception:
+        return {}
+
+
+def forget_update():
+    """app/update.json is used up; on Windows a reader may hold it a moment: then the next start finds it again"""
+    try:
+        UPDATE_FILE.unlink(missing_ok=True)
+    except OSError as e:
+        log("update.json not removed:", repr(e))
+
+
+def write_update(u):
+    APP.mkdir(parents=True, exist_ok=True)
+    tmp = UPDATE_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(u, indent=1), encoding="utf-8")
+    replace(tmp, UPDATE_FILE)
+
+
+def take_ready(state):
+    """at a start (the program is not open): the version an update in the background got ready runs from now on"""
+    u = read_update()
+    if not u:
+        return
+    bad = state.setdefault("bad", [])
+    bad += [v for v in u.get("bad", []) if isinstance(v, str) and v not in bad]
+    ready = u.get("ready")
+    forget_update()
+    vdir = VERSIONS / str(ready)
+    if (ready and ready != state.get("current") and ready not in bad and (vdir / ".ok").exists()
+            and (vdir / "uv.lock").exists() and (ENVS / lock_hash(vdir) / ".ok").exists()):
+        log(f"{ready} was made ready in the background: it runs from this start on (was {state.get('current')})")
+        activate(state, ready, vdir)
+    else:
+        save_state(state)
+
+
+def stage(state):
+    """after the start, the program open: get the version latest.json names ready for the next start (see above)"""
+    if not take_lock(UPDATE_LOCK):
+        return log("background update: another one is running")
+    try:
+        mine = json.loads(json.dumps(state))                        # a copy that is never saved
+        dist = mine["dist"].rstrip("/")
+        meta = fetch_latest(dist, CHECK_BUDGET)
+        u = read_update()
+        version = meta["version"]
+        mine["bad"] = sorted(set(mine.get("bad") or []) | set(u.get("bad") or []))
+        if version == mine.get("current") or version in mine["bad"] or version == u.get("ready"):
+            return log(f"background update: nothing new ({version})")
+        log(f"background update: getting {version} ready for the next start (running {mine.get('current')})")
+        try:
+            get_version(mine, dist, meta)
+        except Exception:
+            if version in mine["bad"]:
+                write_update({**read_update(), "bad": sorted(set(read_update().get("bad") or []) | {version})})
+            raise
+        write_update({**read_update(), "ready": version})
+        log(f"background update: {version} is ready; it runs from the next start")
+    except Exception as e:                                          # offline, a bad release ...: the next start tries again
+        log("background update skipped:", repr(e))
+    finally:
+        UPDATE_LOCK.unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------- windows of our own
@@ -561,6 +680,7 @@ class Progress:
 
     def __init__(self):
         self.key, self.since = None, time.time()
+        self.stage = False                                          # launch(): get the next version ready afterwards
 
     def step(self, key):
         if key != self.key:
@@ -741,25 +861,51 @@ def launch(ui, extra):
             spawn_app(current, state.get("browser") or "chromium", extra)
             return 0
         settle(state)
-        if state.get("dist") and not os.environ.get("QARGO_NO_UPDATE"):
-            ui.step("start")
-            broken = not state.get("current") or not (VERSIONS / state["current"] / ".ok").exists()
-            try:
-                update(state, 30 if broken else CHECK_BUDGET, repair=broken, step=ui.step)
-            except Exception as e:                                  # offline, bad release...: start what we have
-                log("update skipped:", repr(e))
-                state = load_state()
+        updates = bool(state.get("dist")) and not os.environ.get("QARGO_NO_UPDATE")
+        if updates:
+            take_ready(state)                                       # got ready in the background last time
+        ui.step("start")
+        if updates and (not state.get("current") or not (VERSIONS / state["current"] / ".ok").exists()):
+            install_now(state, ui, "no working version installed", repair=True)
         version = state.get("current")
         if not version or not (VERSIONS / version / ".ok").exists():
             raise RuntimeError("no installed version")
         outcome = start(state, version, ui, extra)
         if outcome == "failed" and state.get("proven") != version and rollback(state, "failed at its first start"):
             outcome = start(state, state["current"], ui, extra)
+        if outcome == "failed" and updates and install_now(state, ui, f"{state['current']} failed at its start"):
+            outcome = start(state, state["current"], ui, extra)     # a newer version was out: it may have the fix
         if outcome == "failed":
             raise RuntimeError("the app ended with an error while starting (see app.log)")
+        ui.stage = updates                                          # once the program is up: the next version, in the background
         return 0
     finally:
         LOCK.unlink(missing_ok=True)
+
+
+def install_now(state, ui, why, repair=False):
+    """the program cannot start as it is: install the newest version first, the operator waiting ("Installing an
+    update"). Waits for an update that runs in the background, which may be getting that very version. True when a
+    new version is current now. state is changed in place."""
+    log(f"{why}: installing the newest version before the start")
+    ui.step("update")
+    if not wait_update_lock(ui.step):
+        log("an update in the background is still busy: starting what is installed")
+        return False
+    try:
+        before = state.get("current")
+        take_ready(state)                                           # the update that just ended may have got it ready
+        if state.get("current") != before and (VERSIONS / state["current"] / ".ok").exists():
+            return True
+        return update(state, CHECK_BUDGET, repair=repair, step=ui.step)
+    except Exception as e:                                          # offline, bad release...: start what we have
+        log("update skipped:", repr(e))
+        fresh = load_state()
+        state.clear()
+        state.update(fresh)
+        return False
+    finally:
+        UPDATE_LOCK.unlink(missing_ok=True)
 
 
 def cmd_launch(extra):
@@ -770,6 +916,8 @@ def cmd_launch(extra):
     box = ui.run(lambda: launch(ui, extra))
     if "error" in box:
         return fatal(repr(box["error"]))
+    if ui.stage:
+        stage(load_state())                                         # no window of ours: the program is open already
     return box.get("value", 0)
 
 
@@ -790,8 +938,17 @@ def cmd_install(dist, site=None):
         say("Qargo Autofill is open or is starting. Close it and run the installer again.")
         return 3
     try:
-        state["pending"] = None
-        update(state, budget=30, repair=True)
+        if not take_lock(UPDATE_LOCK):
+            say("Qargo Autofill is getting an update ready. Waiting for it to finish…")
+            if not wait_update_lock():
+                say("The update is still busy. Run the installer again in a few minutes.")
+                return 3
+        try:
+            state["pending"] = None
+            update(state, budget=CHECK_BUDGET, repair=True)
+            forget_update()                                         # what an update got ready before is this one, or older
+        finally:
+            UPDATE_LOCK.unlink(missing_ok=True)
     except NoSite as e:
         say(f"Qargo Autofill needs its site code: {e}")
         return 4
@@ -803,7 +960,8 @@ def cmd_install(dist, site=None):
 
 def cmd_status():
     state = load_state()
-    info = {"home": str(HOME), "data": str(DATA), "running": app_running(state), **state}
+    info = {"home": str(HOME), "data": str(DATA), "running": app_running(state), **state,
+            "ready_for_next_start": read_update().get("ready"), "updating_now": updating_elsewhere()}
     current = state.get("current")
     if current and (VERSIONS / current / "uv.lock").exists():
         info["python"] = str(venv_python(ENVS / lock_hash(VERSIONS / current)))
@@ -817,6 +975,7 @@ def cmd_rollback():
         raise SystemExit("Qargo Autofill is open. Close it first.")
     if not rollback(state, "was rolled back by hand"):
         raise SystemExit("no previous version to go back to")
+    forget_update()                                                 # back on purpose: nothing newer slips in at the next start
     say(f"now on {state['current']}")
     return 0
 
